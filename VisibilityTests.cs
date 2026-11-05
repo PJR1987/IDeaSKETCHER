@@ -1,0 +1,11 @@
+using System;using System.Drawing;using System.Linq;using System.Windows.Forms;using System.Runtime.InteropServices;
+namespace IDSketcher {
+partial class LayerList {
+ [DllImport("user32.dll")] static extern IntPtr SendMessage(IntPtr hwnd,int msg,IntPtr w,IntPtr l);
+ public void TestNativeEye(int index){var r=GetItemRectangle(index);IntPtr point=new IntPtr(((r.Top+r.Height/2)<<16)|15);SendMessage(Handle,0x201,new IntPtr(1),point);SendMessage(Handle,0x202,IntPtr.Zero,point);}
+}
+partial class Canvas {public Bitmap VisibilityFrame(){var b=new Bitmap(Width,Height);using(var g=Graphics.FromImage(b)){g.Clear(Color.Magenta);PaintCachedDocument(g);}return b;}}
+partial class Studio {
+ public void TestVersion41(){SetDocument(new Document("A4",100),null);AddThreeDModel(TestCube(),"visibility test");canvas.Fit();var model=canvas.Doc.Selected;CaptureCanvasLayer();var capture=canvas.Doc.Layers.Last();if(compactPalette)paletteTabs.SelectedTab=layerPage;Application.DoEvents();int m=canvas.Doc.Layers.Count-1-canvas.Doc.Layers.IndexOf(model),c=canvas.Doc.Layers.Count-1-canvas.Doc.Layers.IndexOf(capture);layers.TestNativeEye(c);if(!capture.Visible||!model.Visible)throw new Exception("Native eye: show capture");layers.TestNativeEye(m);if(model.Visible||!capture.Visible)throw new Exception("Native eye: hide model, capture alone");using(var frame=canvas.VisibilityFrame()){var offset=canvas.Offset;int x=(int)(offset.X+canvas.Doc.Width*canvas.Zoom/2),y=(int)(offset.Y+canvas.Doc.Height*canvas.Zoom/2);if(frame.GetPixel(x,y).ToArgb()==Color.White.ToArgb())throw new Exception("Capture alone is missing");}layers.TestNativeEye(c);if(capture.Visible||model.Visible)throw new Exception("Native eye: hide both layers");using(var frame=canvas.VisibilityFrame()){var offset=canvas.Offset;int x=(int)(offset.X+canvas.Doc.Width*canvas.Zoom/2),y=(int)(offset.Y+canvas.Doc.Height*canvas.Zoom/2);if(frame.GetPixel(x,y).ToArgb()!=Color.White.ToArgb())throw new Exception("Hidden layer remains in cached canvas");}layers.TestNativeEye(m);if(!model.Visible||capture.Visible)throw new Exception("Native eye: show model alone");layers.TestNativeEye(c);layers.TestNativeEye(c);layers.TestNativeEye(m);if(capture.Visible||model.Visible)throw new Exception("Native repeated visibility toggles");dirty=false;}
+}
+}

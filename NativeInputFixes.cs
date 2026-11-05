@@ -1,0 +1,7 @@
+using System;using System.Drawing;using System.Windows.Forms;using System.IO;
+namespace IDSketcher{
+partial class Stroke{public void FlushSoftEndpoint(){if(tool=="Paintbrush"&&flowTravel>0){Dab(last);flowTravel=0;}}}
+partial class Studio{
+ public void TestHighFlowPaintbrush(){var results=new System.Collections.Generic.List<string>();try{foreach(bool fast in new[]{false,true})using(var image=new Bitmap(1200,500)){Stroke.FastSoftEnabled=fast;var watch=System.Diagnostics.Stopwatch.StartNew();var brush=new Stroke(image,"Paintbrush",Color.Black,140,.65f,new PointF(100,250),null,1,.6f);for(int i=1;i<=4000;i++)brush.Move(new PointF(100+i*.2f,250));brush.FlushSoftEndpoint();watch.Stop();if(image.GetPixel(900,250).A<164||image.GetPixel(500,250).A<164)throw new Exception("High-flow brush endpoint/coverage");results.Add((fast?"Optimised":"Original")+" 140px paintbrush, 100% flow, 4000 packets: "+watch.ElapsedMilliseconds+" ms");}}finally{Stroke.FastSoftEnabled=true;}File.WriteAllLines(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"high-flow-paintbrush.txt"),results.ToArray());}public void PrepareInteractiveTest(){previewing=true;SetDocument(new Document("A4",100),null);canvas.Doc.Selected.Name="Bottom";AddTypedLayer(false);canvas.Doc.Selected.Name="Middle";AddTypedLayer(false);canvas.Doc.Selected.Name="Top";SelectTool("Paintbrush");size.Value=140;flow.Value=100;opacity.Value=65;WindowState=FormWindowState.Normal;ClientSize=new Size(1280,900);RefreshLayers();}
+}
+}

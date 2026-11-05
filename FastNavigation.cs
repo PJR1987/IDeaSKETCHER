@@ -1,0 +1,23 @@
+using System;using System.Drawing;using System.Drawing.Drawing2D;using System.Drawing.Imaging;using System.Windows.Forms;
+namespace IDSketcher{
+partial class Canvas{
+ public void TestFastNavigation(){
+  using(var doc=new Document("A4",150)){Doc=doc;Size=new Size(1000,700);for(int i=0;i<3;i++){var layer=i==0?doc.Selected:new Layer("TEST "+i,doc.Width,doc.Height);if(i>0)doc.Layers.Add(layer);layer.Opacity=i==0?1:.4f;using(var g=Graphics.FromImage(layer.Image))using(var brush=new HatchBrush(HatchStyle.DiagonalCross,i%2==0?Color.Teal:Color.Coral,Color.White))g.FillRectangle(brush,0,0,doc.Width,doc.Height);layer.InvalidateVectors();}
+   EnsureNavigationImage();var proxy=navigationImage;long baseline,fast;using(var frame=new Bitmap(1000,700))using(var g=Graphics.FromImage(frame)){var watch=System.Diagnostics.Stopwatch.StartNew();for(int i=0;i<16;i++){Zoom=.45f+i*.025f;Offset=new PointF(i*3,i*2);g.Clear(Color.Gray);PaintCachedDocument(g);}watch.Stop();baseline=watch.ElapsedMilliseconds;Zoom=.45f;Offset=PointF.Empty;watch.Restart();for(int i=0;i<16;i++){SetZoom(.45f+i*.025f,new Point(500,350));Offset=new PointF(i*3,i*2);g.Clear(Color.Gray);var state=g.Save();g.TranslateTransform(Offset.X,Offset.Y);g.ScaleTransform(Zoom,Zoom);if(!PaintQuickNavigation(g))throw new Exception("Fast navigation preview missing");g.Restore(state);}watch.Stop();fast=watch.ElapsedMilliseconds;if(!object.ReferenceEquals(proxy,navigationImage))throw new Exception("Viewport gestures rebuilt proxy");var anchor=new Point(330,220);var before=Pixel(anchor);SetZoom(1.2f,anchor);if(StrokeSession.Distance(before,Pixel(anchor))>.001)throw new Exception("Zoom anchor drift");
+    var until=DateTime.UtcNow.AddSeconds(2);while(quickNavigation&&DateTime.UtcNow<until){Application.DoEvents();System.Threading.Thread.Sleep(5);}if(quickNavigation)throw new Exception("Navigation did not refine after idle");PaintCachedDocument(g);if(screenZoom!=Zoom)throw new Exception("Final sharp view stale");doc.Selected.InvalidateVectors();EnsureNavigationImage();if(object.ReferenceEquals(proxy,navigationImage))throw new Exception("Document edits did not refresh proxy");}
+   System.IO.File.WriteAllText(System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"navigation-benchmark.txt"),"16 zoom/pan frames; full layer rebuilds: "+baseline+" ms; cached navigation: "+fast+" ms");ClearScreenLayers();DisposeNavigation();Doc=null;
+  }
+ }
+ Bitmap navigationImage;Document navigationDocument;long navigationStamp;bool quickNavigation;Timer navigationTimer;
+ long NavigationStamp(){unchecked{long hash=17;foreach(var layer in Doc.Layers){hash=hash*31+layer.GetHashCode();hash=hash*31+layer.VisualVersion;hash=hash*31+layer.Opacity.GetHashCode();hash=hash*31+(layer.Visible?1:0);}return hash;}}
+ bool NavigationImageCurrent{get{return Doc!=null&&navigationImage!=null&&navigationDocument==Doc&&navigationStamp==NavigationStamp();}}
+ void EnsureNavigationImage(){if(Doc==null||NavigationImageCurrent)return;ReleaseNavigationImage();float scale=Math.Min(1,2048f/Math.Max(Doc.Width,Doc.Height));int w=Math.Max(1,(int)Math.Ceiling(Doc.Width*scale)),h=Math.Max(1,(int)Math.Ceiling(Doc.Height*scale));navigationImage=new Bitmap(w,h,PixelFormat.Format32bppPArgb);using(var g=Graphics.FromImage(navigationImage)){g.Clear(Color.White);g.ScaleTransform((float)w/Doc.Width,(float)h/Doc.Height);PaintPanDocument(g);}navigationDocument=Doc;navigationStamp=NavigationStamp();}
+ void ReleaseNavigationImage(){if(navigationImage!=null){navigationImage.Dispose();navigationImage=null;}navigationDocument=null;}
+ void ArmNavigationTimer(){if(navigationTimer==null){navigationTimer=new Timer{Interval=120};navigationTimer.Tick+=delegate{navigationTimer.Stop();if(IsDisposed)return;if(panning||stroke!=null||vectorDragging||dragging3D){navigationTimer.Start();return;}if(quickNavigation){quickNavigation=false;Invalidate();}else if(Doc!=null&&!NavigationImageCurrent)EnsureNavigationImage();};}navigationTimer.Stop();navigationTimer.Start();}
+ void BeginQuickNavigation(){if(Doc==null)return;EnsureNavigationImage();quickNavigation=true;ArmNavigationTimer();}
+ void WarmNavigationAfterPaint(){if(!quickNavigation&&!panning&&Doc!=null&&!NavigationImageCurrent&&(navigationTimer==null||!navigationTimer.Enabled))ArmNavigationTimer();}
+ bool PaintQuickNavigation(Graphics g){if(!(quickNavigation||panning)||navigationImage==null)return false;g.InterpolationMode=InterpolationMode.HighQualityBilinear;g.DrawImage(navigationImage,new Rectangle(0,0,Doc.Width,Doc.Height));return true;}
+ void StopQuickPan(){quickNavigation=false;}
+ void DisposeNavigation(){if(navigationTimer!=null){navigationTimer.Stop();navigationTimer.Dispose();navigationTimer=null;}ReleaseNavigationImage();}
+}
+}
